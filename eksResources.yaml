@@ -1,0 +1,83 @@
+# Namespace for App "mta"
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cicd-mta
+
+---
+# Deployment for App "mta"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-mta-deployment
+  namespace: cicd-mta
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app-mta
+  template:
+    metadata:
+      labels:
+        app: app-mta
+    spec:
+      containers:
+      - name: app-mta-container
+        image: "339049388387.dkr.ecr.us-east-1.amazonaws.com/demos:your-mta-image-tag"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-secret
+              key: api-key
+
+---
+# Service for App "mta"
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-mta-service
+  namespace: cicd-mta
+spec:
+  selector:
+    app: app-mta
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: ClusterIP
+
+---
+# Ingress for App "mta"
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-mta-ingress
+  namespace: cicd-mta
+  annotations:
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:339049388387:certificate/cf3e74e6-530e-4443-808a-705a2513ad42"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/group.name: "app-mta-group"
+    alb.ingress.kubernetes.io/load-balancer-attributes: "idle_timeout.timeout_seconds=60"
+    alb.ingress.kubernetes.io/subnets: "subnet-02429ef8796c82223, subnet-02e34d633bc6d6e91"
+    alb.ingress.kubernetes.io/security-groups: "sg-0d069fd1581eefb45"
+    alb.ingress.kubernetes.io/healthcheck-path: "/"
+    alb.ingress.kubernetes.io/healthcheck-port: "5000"
+spec:
+  rules:
+  - host: cicd-mta.apps-aws.com   # Change domain accordingly
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-mta-service
+            port:
+              number: 80
